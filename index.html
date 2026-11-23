@@ -35,14 +35,35 @@ const initial=()=>({schema:1,projects:[{id:uid(),name:'새 작품',genre:'소설
 let data=initial(),saveTimer=null,db=null,activeTab='write',selectionRange=null;
 const project=()=>data.projects.find(p=>p.id===data.activeProject)||data.projects[0];
 const chapter=()=>project()?.chapters.find(c=>c.id===data.activeChapter)||project()?.chapters[0];
-function ensureActive(){if(!data.activeProject)data.activeProject=data.projects[0].id;if(!data.activeChapter)data.activeChapter=project().chapters[0].id}
+function ensureActive(){
+ if(!data||!Array.isArray(data.projects))data={schema:1,projects:[]};
+ if(!data.projects.length)data.projects.push({id:uid(),name:'새 작품',genre:'소설',chapters:[],notes:'',materials:[],versions:[]});
+ data.projects.forEach(p=>{
+  if(!p.id)p.id=uid();if(!p.name)p.name='이름 없는 작품';if(!Array.isArray(p.chapters))p.chapters=[];
+  if(!p.chapters.length)p.chapters.push({id:uid(),title:'1장',html:'<p><br></p>',updatedAt:now()});
+  p.chapters.forEach(c=>{if(!c.id)c.id=uid();if(typeof c.title!=='string')c.title='제목 없는 챕터';if(typeof c.html!=='string')c.html='<p><br></p>'});
+  if(typeof p.notes!=='string')p.notes='';if(!Array.isArray(p.materials))p.materials=[];if(!Array.isArray(p.versions))p.versions=[];
+ });
+ if(!data.projects.some(p=>p.id===data.activeProject))data.activeProject=data.projects[0].id;
+ const active=project();
+ if(!active.chapters.some(c=>c.id===data.activeChapter))data.activeChapter=active.chapters[0].id;
+}
 function openDB(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window))return resolve(null);const req=indexedDB.open('dasul-hangul-db',1);req.onupgradeneeded=()=>req.result.createObjectStore('state');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 async function dbPut(key,value){if(!db)return;return new Promise((res,rej)=>{const tx=db.transaction('state','readwrite');tx.objectStore('state').put(value,key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
 async function dbGet(key){if(!db)return null;return new Promise((res,rej)=>{const tx=db.transaction('state','readonly'),r=tx.objectStore('state').get(key);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
-async function persist(){data.updatedAt=now();const raw=JSON.stringify(data);try{localStorage.setItem('dasul-hangul-backup',raw);await dbPut('main',data);$('saveState').textContent='저장됨 · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch(e){$('saveState').textContent='저장 공간 확인 필요';console.error(e)}}
+async function persist(){
+ data.updatedAt=now();const raw=JSON.stringify(data);let localOk=false,dbOk=false,saveError=null;
+ try{localStorage.setItem('dasul-hangul-backup',raw);localOk=true}catch(e){saveError=e}
+ try{if(db){await dbPut('main',data);dbOk=true}}catch(e){saveError=e}
+ if(localOk||dbOk){$('saveState').textContent='저장됨 · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+(localOk&&dbOk?'':' · 보조 저장소 사용 불가')}
+ else{$('saveState').textContent='저장 실패 · 백업을 다운로드해 주세요';console.error('저장 실패',saveError)}
+}
 function scheduleSave(){ $('saveState').textContent='저장 중…';clearTimeout(saveTimer);saveTimer=setTimeout(persist,1200);updateStats()}
 function snapshot(){const c=chapter();if(!c)return;project().versions.unshift({id:uid(),chapterId:c.id,title:c.title,html:c.html,createdAt:now()});project().versions=project().versions.slice(0,80);persist();renderTool('versions');alert('현재 챕터의 스냅샷을 저장했습니다.')}
-function loadState(s){if(!s||!Array.isArray(s.projects)||!s.projects.length)throw Error('올바른 백업 파일이 아닙니다.');data=s;ensureActive();renderAll();persist()}
+function loadState(s){
+ if(!s||!Array.isArray(s.projects)||!s.projects.length)throw Error('올바른 백업 파일이 아닙니다.');
+ data=s;ensureActive();renderAll();scheduleSave();
+}
 function textOf(html){const d=document.createElement('div');d.innerHTML=html;return d.innerText||d.textContent||''}
 function count(s){return {all:[...s].length,plain:[...s.replace(/\s/g,'')].length}}
 function updateStats(){if(!project())return;const c=chapter(),ct=count(textOf(c?.html||'')),pt=count(project().chapters.map(x=>textOf(x.html)).join('\n')),at=count(data.projects.flatMap(p=>p.chapters.map(x=>textOf(x.html))).join('\n'));$('chapterCount').textContent=ct.all.toLocaleString()+'자';$('projectCount').textContent=pt.all.toLocaleString()+'자';$('allCount').textContent=at.all.toLocaleString()+'자';$('noSpaceCount').textContent='현재 '+ct.plain.toLocaleString()+'자'}
@@ -75,10 +96,22 @@ const section='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><hs:sec xm
 const content='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><opf:package xmlns:opf="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><opf:metadata><opf:title>'+xml(p.name+' - '+c.title)+'</opf:title><opf:language>ko</opf:language><opf:identifier id="uid">'+uid()+'</opf:identifier></opf:metadata><opf:manifest><opf:item id="header" href="header.xml" media-type="application/xml"/><opf:item id="section0" href="section0.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="section0"/></opf:spine></opf:package>';
 zip.file('mimetype','application/hwp+zip',{compression:'STORE'});zip.file('version.xml','<?xml version="1.0" encoding="UTF-8"?><ha:version xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" appVersion="1.0" os="Windows" xmlVersion="1.5" hwpVersion="5.0" version序="1"/>');zip.file('META-INF/container.xml','<?xml version="1.0" encoding="UTF-8"?><ocf:container xmlns:ocf="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><ocf:rootfiles><ocf:rootfile full-path="Contents/content.hpf" media-type="application/hwpml-package+xml"/></ocf:rootfiles></ocf:container>');zip.file('Contents/header.xml',header);zip.file('Contents/section0.xml',section);zip.file('Contents/content.hpf',content);zip.file('Preview/PrvText.txt',c.title+'\n'+paras.map(x=>x.text).join('\n'));zip.file('settings.xml','<?xml version="1.0" encoding="UTF-8"?><ha:settings xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app"/>');const blob=await zip.generateAsync({type:'blob',mimeType:'application/hwp+zip',compression:'DEFLATE'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(c.title.replace(/[\\/:*?"<>|]/g,'_')||'document')+'.hwpx';a.click();URL.revokeObjectURL(a.href);alert('HWPX 파일을 생성했습니다. 다만 현재 내보내기는 기본 문단 중심의 초기 구현이며, 한컴오피스 호환성과 세부 서식 보존은 실제 한글 프로그램에서 검증해야 합니다.')}
 function printPdf(){const w=window.open('','_blank');if(!w){alert('팝업을 허용해 주세요.');return}const c=chapter();w.document.write('<html lang="ko"><head><meta charset="utf-8"><title>'+esc(c.title)+'</title><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR&display=swap" rel="stylesheet"><style>@page{size:A4;margin:22mm}body{font-family:"Noto Serif KR",serif;line-height:1.8;color:#222}h1{font-size:20pt}</style></head><body><h1>'+esc(c.title)+'</h1>'+c.html+'</body></html>');w.document.close();w.onload=()=>w.print()}
-$('editor').addEventListener('input',()=>{chapter().html=$('editor').innerHTML;chapter().updatedAt=now();scheduleSave()});$('editor').addEventListener('keyup',saveSelection);$('editor').addEventListener('mouseup',saveSelection);$('editor').addEventListener('touchend',saveSelection);
+$('editor').addEventListener('input',()=>{chapter().html=$('editor').innerHTML;chapter().updatedAt=now();scheduleSave()});
+window.addEventListener('pagehide',()=>{try{localStorage.setItem('dasul-hangul-backup',JSON.stringify(data))}catch(e){console.warn('종료 전 보조 저장 실패',e)}});$('editor').addEventListener('keyup',saveSelection);$('editor').addEventListener('mouseup',saveSelection);$('editor').addEventListener('touchend',saveSelection);
 $('toolbar').querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>command(b.dataset.cmd));$('fontSelect').onchange=e=>applyFont(e.target.value);$('fontSize').onchange=e=>command('fontSize',e.target.value);$('textColor').oninput=e=>command('foreColor',e.target.value);$('highlightColor').oninput=e=>command('hiliteColor',e.target.value);$('lineHeight').onchange=e=>{const s=getSelection();if(!s.rangeCount)return;let n=s.anchorNode?.parentElement;if(n&&$('editor').contains(n)){n.closest('p,div')?.style.setProperty('line-height',e.target.value);chapter().html=$('editor').innerHTML;scheduleSave()}};$('clearFormat').onclick=()=>command('removeFormat');
 $('projectSelect').onchange=e=>{data.activeProject=e.target.value;data.activeChapter=project().chapters[0].id;renderAll();scheduleSave()};$('chapterTree').onclick=e=>{const b=e.target.closest('[data-chapter]');if(!b)return;data.activeChapter=b.dataset.chapter;renderAll();scheduleSave()};$('chapterTitle').onchange=e=>{chapter().title=e.target.value;renderProjects();scheduleSave()};$('newProjectBtn').onclick=createProject;$('addChapterBtn').onclick=addChapter;$('renameChapterBtn').onclick=()=>{const n=prompt('챕터 이름',chapter().title);if(n){chapter().title=n;renderAll();scheduleSave()}};$('deleteChapterBtn').onclick=()=>{if(project().chapters.length<2)return alert('작품에는 최소 한 개의 챕터가 필요합니다.');if(confirm('이 챕터를 삭제할까요?')){project().chapters=project().chapters.filter(c=>c.id!==data.activeChapter);data.activeChapter=project().chapters[0].id;renderAll();scheduleSave()}};$('moveUpBtn').onclick=()=>moveChapter(-1);$('moveDownBtn').onclick=()=>moveChapter(1);function moveChapter(d){const a=project().chapters,i=a.findIndex(c=>c.id===data.activeChapter),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];renderProjects();scheduleSave()}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));$('manualSave').onclick=snapshot;$('backupBtn').onclick=backup;$('importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{loadState(JSON.parse(await f.text()));alert('백업을 복원했습니다.')}catch(err){alert('가져오기에 실패했습니다: '+err.message)}e.target.value=''};$('backupBtn').addEventListener('contextmenu',e=>{e.preventDefault();$('importFile').click()});$('backupBtn').onclick=()=>showModal('백업 및 복원','<p>전체 작품과 원고를 JSON 파일로 내보내거나 가져옵니다.</p><button id="doBackup" class="primary">전체 백업 다운로드</button> <button id="doImport">백업 가져오기</button>');$('backupBtn').addEventListener('click',()=>{setTimeout(()=>{if($('doBackup')){$('doBackup').onclick=backup;$('doImport').onclick=()=>$('importFile').click()}},0)});$('materialFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{project().materials.unshift({id:uid(),title:f.name,body:'',image:r.result});scheduleSave();renderTool('materials')};r.readAsDataURL(f)};$('focusBtn').onclick=()=>document.body.classList.toggle('focus');$('exportHwpx').onclick=exportHwpx;$('exportPdf').onclick=printPdf;
-async function init(){try{db=await openDB();const stored=await dbGet('main');const local=localStorage.getItem('dasul-hangul-backup');const backupData=local?JSON.parse(local):null;if(stored&&(!backupData||new Date(stored.updatedAt)>new Date(backupData.updatedAt)))data=stored;else if(backupData)data=backupData}catch(e){console.warn('저장소 초기화:',e)}ensureActive();renderAll();detectFonts();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});if(!localStorage.getItem('dasul-hangul-welcome')){localStorage.setItem('dasul-hangul-welcome','1')}}init();
+async function init(){
+ let stored=null,backupData=null;
+ try{db=await openDB();stored=await dbGet('main')}catch(e){console.warn('IndexedDB를 열지 못했습니다:',e)}
+ try{const local=localStorage.getItem('dasul-hangul-backup');backupData=local?JSON.parse(local):null}catch(e){console.warn('브라우저 백업을 읽지 못했습니다:',e)}
+ const validStored=stored&&Array.isArray(stored.projects)&&stored.projects.length;
+ const validBackup=backupData&&Array.isArray(backupData.projects)&&backupData.projects.length;
+ if(validStored&&(!validBackup||new Date(stored.updatedAt||0)>new Date(backupData.updatedAt||0)))data=stored;
+ else if(validBackup)data=backupData;
+ ensureActive();renderAll();detectFonts();
+ if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+ try{if(!localStorage.getItem('dasul-hangul-welcome'))localStorage.setItem('dasul-hangul-welcome','1')}catch(e){}
+}init();
 })();
 </script></body></html>
