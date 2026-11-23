@@ -140,53 +140,65 @@ const HWPX_BASE={body:0,title:1,sub:2,h3:3,quote:4},HWPX_ALIGN=['LEFT','CENTER',
 const hwpxChar=(st,b,i)=>(HWPX_BASE[st]??0)*4+(b?1:0)+(i?2:0);
 const hwpxPara=p=>(p.list?(p.list==='ol'?3:2):p.style==='quote'?1:0)*4+Math.max(0,HWPX_ALIGN.indexOf(String(p.align||'left').toUpperCase()));
 function hwpxHeader(){
- const seven=(n,v)=>'<hh:'+n+' hangul="'+v+'" latin="'+v+'" hanja="'+v+'" japanese="'+v+'" other="'+v+'" symbol="'+v+'" user="'+v+'"/>';
- const faces=['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'].map(l=>'<hh:fontface lang="'+l+'" fontCnt="1"><hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"><hh:typeInfo familyType="FCAT_MYUNGJO" weight="5" proportion="4" contrast="2" strokeVariation="1" armStyle="1" letterform="1" midline="1" xHeight="1"/></hh:font></hh:fontface>').join('');
- const side=['leftBorder','rightBorder','topBorder','bottomBorder'].map(n=>'<hh:'+n+' type="NONE" width="0.1 mm" color="#000000"/>').join('');
- const fill='<hh:borderFill id="1" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0"><hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>'+side+'<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/><hc:fillBrush><hc:winBrush faceColor="none" hatchColor="#999999" alpha="0"/></hc:fillBrush></hh:borderFill>';
- let chars='';
- HWPX_H.forEach((h,bi)=>{for(let k=0;k<4;k++)chars+='<hh:charPr id="'+(bi*4+k)+'" height="'+h+'" textColor="'+(bi===4?'#555555':'#000000')+'" shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">'+seven('fontRef',0)+seven('ratio',100)+seven('spacing',0)+seven('relSize',100)+seven('offset',0)+(k&2?'<hh:italic/>':'')+(k&1?'<hh:bold/>':'')+'<hh:underline type="NONE" shape="SOLID" color="#000000"/><hh:strikeout shape="NONE" color="#000000"/><hh:outline type="NONE"/><hh:shadow type="NONE" color="#B2B2B2" offsetX="10" offsetY="10"/></hh:charPr>'});
- const lv=[1,2,3,4,5,6,7].map(n=>'<hh:paraHead start="1" level="'+n+'" align="LEFT" useInstWidth="1" autoIndent="1" widthAdjust="0" textOffsetType="PERCENT" textOffset="50" numFormat="DIGIT" charPrIDRef="4294967295" checkable="0">^'+n+'.</hh:paraHead>').join('');
- const numbering='<hh:numberings itemCnt="1"><hh:numbering id="1" start="0">'+lv+'</hh:numbering></hh:numberings>';
- const bullet='<hh:bullets itemCnt="1"><hh:bullet id="1" char="•" useImage="0"><hh:paraHead level="0" align="LEFT" useInstWidth="0" autoIndent="1" widthAdjust="0" textOffsetType="PERCENT" textOffset="50" numFormat="DIGIT" charPrIDRef="4294967295" checkable="0"/></hh:bullet></hh:bullets>';
- let paras='';
- for(let kind=0;kind<4;kind++)HWPX_ALIGN.forEach((al,ai)=>{
-  const left=kind===1?2000:kind>1?1500:0,head=kind===2?'<hh:heading type="BULLET" idRef="1" level="0"/>':kind===3?'<hh:heading type="NUMBER" idRef="1" level="0"/>':'<hh:heading type="NONE" idRef="0" level="0"/>';
-  paras+='<hh:paraPr id="'+(kind*4+ai)+'" tabPrIDRef="0" condense="0" fontLineHeight="0" snapToGrid="1" suppressLineNumbers="0" checked="0"><hh:align horizontal="'+al+'" vertical="BASELINE"/>'+head+'<hh:breakSetting breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD" widowOrphan="0" keepWithNext="0" keepLines="0" pageBreakBefore="0" lineWrap="BREAK"/><hh:autoSpacing eAsianEng="0" eAsianNum="0"/><hh:margin><hc:intent value="0" unit="HWPUNIT"/><hc:left value="'+left+'" unit="HWPUNIT"/><hc:right value="0" unit="HWPUNIT"/><hc:prev value="0" unit="HWPUNIT"/><hc:next value="0" unit="HWPUNIT"/></hh:margin><hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/><hh:border borderFillIDRef="1" offsetLeft="0" offsetRight="0" offsetTop="0" offsetBottom="0" connect="0" ignoreMargin="0"/></hh:paraPr>';
+ const NS='xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf/"';
+ const fonts=['함초롬바탕','맑은 고딕'];
+ const ff=['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'].map(lang=>'<hh:fontface lang="'+lang+'" fontCnt="2">'+fonts.map((f,i)=>'<hh:font id="'+i+'" face="'+xml(f)+'" type="TTF" isEmbedded="0"/>').join('')+'</hh:fontface>').join('');
+ const chars=[];
+ HWPX_H.forEach((height,base)=>{
+  for(let flags=0;flags<4;flags++){
+   const bold=!!(flags&1),italic=!!(flags&2);
+   chars.push('<hh:charPr id="'+(base*4+flags)+'" height="'+height+'" textColor="'+(base===4?'#555555':'#222222')+'" shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1"><hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>'+(bold?'<hh:bold/>':'')+(italic?'<hh:italic/>':'')+'<hh:underline type="NONE" shape="SOLID" color="#000000"/><hh:strikeout shape="NONE" color="#000000"/></hh:charPr>');
+  }
  });
- const sty=[['바탕글','Normal','body'],['제목','Title','title'],['소제목','Subtitle','sub'],['세부제목','Heading','h3'],['인용','Quote','quote']].map(([n,e,k],i)=>'<hh:style id="'+i+'" type="PARA" name="'+n+'" engName="'+e+'" paraPrIDRef="'+hwpxPara({style:k,align:'left'})+'" charPrIDRef="'+hwpxChar(k,0,0)+'" nextStyleIDRef="0" langID="1042" lockForm="0"/>').join('');
- return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" version="1.4" secCnt="1"><hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList><hh:fontfaces itemCnt="7">'+faces+'</hh:fontfaces><hh:borderFills itemCnt="1">'+fill+'</hh:borderFills><hh:charProperties itemCnt="'+HWPX_H.length*4+'">'+chars+'</hh:charProperties><hh:tabProperties itemCnt="1"><hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/></hh:tabProperties>'+numbering+bullet+'<hh:paraProperties itemCnt="16">'+paras+'</hh:paraProperties><hh:styles itemCnt="5">'+sty+'</hh:styles></hh:refList></hh:head>';
-}
-function hwpxSecPr(){
- const pbf=['BOTH','EVEN','ODD'].map(t=>'<hp:pageBorderFill type="'+t+'" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill>').join('');
- return '<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoSizeLimit="0" textVerticalWidthHead="0" masterPageCnt="0"><hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/><hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/><hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/><hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/><hp:pagePr landscape="WIDELY" width="59528" height="84188" gutterType="LEFT_ONLY"><hp:margin header="4252" footer="4252" gutter="0" left="4252" right="4252" top="5668" bottom="5668"/></hp:pagePr>'+pbf+'</hp:secPr><hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>';
+ const aligns=['LEFT','CENTER','RIGHT','JUSTIFY'];
+ const paras=aligns.map((align,id)=>'<hh:paraPr id="'+id+'" tabPrIDRef="0" condense="0"><hh:align horizontal="'+align+'" vertical="BASELINE"/><hh:heading type="NONE" idRef="0" level="0"/><hh:margin><hc:intent value="0" unit="HWPUNIT"/><hc:left value="0" unit="HWPUNIT"/><hc:right value="0" unit="HWPUNIT"/><hc:prev value="0" unit="HWPUNIT"/><hc:next value="500" unit="HWPUNIT"/></hh:margin><hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/></hh:paraPr>').join('');
+ const styles=[['바탕글','Normal',0,0],['제목','Title',1,4],['소제목','Subtitle',2,8],['세부제목','Heading',3,12],['인용','Quote',0,16]].map((v,i)=>'<hh:style id="'+i+'" type="PARA" name="'+v[0]+'" engName="'+v[1]+'" paraPrIDRef="'+v[2]+'" charPrIDRef="'+v[3]+'" nextStyleIDRef="0" langID="1042"/>').join('');
+ const border='<hh:borderFill id="1" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0"><hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/><hh:leftBorder type="NONE" width="0.1 mm" color="#000000"/><hh:rightBorder type="NONE" width="0.1 mm" color="#000000"/><hh:topBorder type="NONE" width="0.1 mm" color="#000000"/><hh:bottomBorder type="NONE" width="0.1 mm" color="#000000"/><hh:diagonal type="NONE" width="0.1 mm" color="#000000"/><hc:fillBrush><hc:winBrush faceColor="none" hatchColor="#999999" alpha="0"/></hc:fillBrush></hh:borderFill>';
+ return '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hh:head '+NS+' version="1.4" secCnt="1"><hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList><hh:fontfaces itemCnt="7">'+ff+'</hh:fontfaces><hh:borderFills itemCnt="1">'+border+'</hh:borderFills><hh:charProperties itemCnt="'+chars.length+'">'+chars.join('')+'</hh:charProperties><hh:paraProperties itemCnt="4">'+paras+'</hh:paraProperties><hh:styles itemCnt="5">'+styles+'</hh:styles></hh:refList></hh:head>';
 }
 function buildHwpxParts(p,c,paras){
- const all=[{text:c.title,style:'title',align:'left',list:null,runs:[{text:c.title,bold:true,italic:false}]}].concat(paras);
+ const NS='xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf/"';
+ const all=[{text:c.title,style:'title',align:'left',runs:[{text:c.title,bold:true,italic:false}]}].concat(paras||[]);
+ let pid=1000,vpos=0;
+ const secPr='<hp:run charPrIDRef="0"><hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0"><hp:pagePr landscape="WIDELY" width="59528" height="84188" gutterType="LEFT_ONLY"><hp:margin header="4252" footer="4252" gutter="0" left="5669" right="5669" top="5669" bottom="5669"/></hp:pagePr></hp:secPr><hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run>';
  const body=all.map((v,i)=>{
-  const rs=v.runs&&v.runs.length?v.runs:[{text:'',bold:false,italic:false}];
-  const runs=rs.map(r=>'<hp:run charPrIDRef="'+hwpxChar(v.style,r.bold,r.italic)+'">'+(r.text?'<hp:t>'+xml(r.text)+'</hp:t>':'<hp:t/>')+'</hp:run>').join('');
-  return '<hp:p id="'+i+'" paraPrIDRef="'+hwpxPara(v)+'" styleIDRef="'+(HWPX_BASE[v.style]??0)+'" pageBreak="0" columnBreak="0" merged="0">'+(i===0?'<hp:run charPrIDRef="0">'+hwpxSecPr()+'</hp:run>':'')+runs+'</hp:p>';
+  const style=v.style||'body',base=HWPX_BASE[style]??0;
+  const runs=(v.runs&&v.runs.length?v.runs:[{text:v.text||'',bold:false,italic:false}]).map(r=>{
+   const cid=base*4+(r.bold?1:0)+(r.italic?2:0);
+   return '<hp:run charPrIDRef="'+cid+'"><hp:t>'+xml(r.text||'')+'</hp:t></hp:run>';
+  }).join('');
+  const align=String(v.align||'left').toUpperCase(),paraId=Math.max(0,HWPX_ALIGN.indexOf(align));
+  const line='<hp:linesegarray><hp:lineseg textpos="0" vertpos="'+vpos+'" vertsize="'+(HWPX_H[base]||1000)+'" textheight="'+(HWPX_H[base]||1000)+'" baseline="'+Math.round((HWPX_H[base]||1000)*0.85)+'" spacing="600" horzpos="0" horzsize="48200" flags="393216"/></hp:linesegarray>';
+  vpos+=(HWPX_H[base]||1000)*1.6;
+  return '<hp:p id="'+(pid++)+'" paraPrIDRef="'+paraId+'" styleIDRef="'+(HWPX_BASE[style]??0)+'" pageBreak="0" columnBreak="0" merged="0">'+(i===0?secPr:'')+(runs||'<hp:run charPrIDRef="0"><hp:t/></hp:run>')+line+'</hp:p>';
  }).join('');
- const section='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core">'+body+'</hs:sec>';
- const content='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><opf:package xmlns:opf="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><opf:metadata><opf:title>'+xml(p.name+' - '+c.title)+'</opf:title><opf:language>ko</opf:language><opf:identifier id="uid">'+uid()+'</opf:identifier></opf:metadata><opf:manifest><opf:item id="header" href="header.xml" media-type="application/xml"/><opf:item id="section0" href="section0.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="header"/><opf:itemref idref="section0"/></opf:spine></opf:package>';
- return{mimetype:'application/hwp+zip',files:{
-  'version.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version" tagetApplication="WORDPROCESSOR" major="5" minor="1" micro="1" buildNumber="0" os="1" xmlVersion="1.2" application="Hancom Office Hangul" appVersion="1.0"/>',
-  'META-INF/container.xml':'<?xml version="1.0" encoding="UTF-8"?><ocf:container xmlns:ocf="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><ocf:rootfiles><ocf:rootfile full-path="Contents/content.hpf" media-type="application/hwpml-package+xml"/></ocf:rootfiles></ocf:container>',
-  'Contents/header.xml':hwpxHeader(),'Contents/section0.xml':section,'Contents/content.hpf':content,
-  'Preview/PrvText.txt':c.title+'\n'+paras.map(x=>x.text).join('\n'),
-  'settings.xml':'<?xml version="1.0" encoding="UTF-8"?><ha:settings xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app"/>'}};
+ const section='<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hs:sec '+NS+'>'+body+'</hs:sec>';
+ const identifier='daseul-'+uid();
+ const content='<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package '+NS+' version="" unique-identifier="" id=""><opf:metadata><opf:title>'+xml(p.name+' - '+c.title)+'</opf:title><opf:language>ko</opf:language><opf:meta name="creator" content="text">다슬</opf:meta><opf:meta name="identifier" content="text">'+identifier+'</opf:meta></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/><opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="header" linear="yes"/><opf:itemref idref="section0" linear="yes"/></opf:spine></opf:package>';
+ const preview=c.title+'\r\n'+all.map(v=>v.text||((v.runs||[]).map(r=>r.text).join(''))).join('\r\n');
+ return {mimetype:'application/hwp+zip',files:{
+  'version.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version" tagetApplication="WORDPROCESSOR" major="5" minor="1" micro="0" buildNumber="1" os="1" xmlVersion="1.4" application="Daseul Hangul" appVersion="1.0"/>',
+  'Contents/header.xml':hwpxHeader(),
+  'Contents/section0.xml':section,
+  'Contents/content.hpf':content,
+  'Preview/PrvText.txt':preview.slice(0,10000),
+  'settings.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><ha:HWPApplicationSetting xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app"><ha:CaretPosition listIDRef="0" paraIDRef="0" pos="0"/></ha:HWPApplicationSetting>',
+  'META-INF/container.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><ocf:container xmlns:ocf="urn:oasis:names:tc:opendocument:xmlns:container"><ocf:rootfiles><ocf:rootfile full-path="Contents/content.hpf" media-type="application/hwpml-package+xml"/></ocf:rootfiles></ocf:container>',
+  'META-INF/manifest.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><odf:manifest xmlns:odf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"/>'
+ }};
 }
 function saveBlob(blob,filename){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href)}
 const exportName=c=>c.title.replace(/[\\/:*?"<>|]/g,'_')||'document';
 async function exportHwpx(){
  if(!window.JSZip){alert('HWPX 생성 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');return}
- const p=project(),c=chapter(),parts=buildHwpxParts(p,c,htmlToParagraphs(c.html)),zip=new JSZip();
- zip.file('mimetype',parts.mimetype,{compression:'STORE',createFolders:false}); /* 반드시 첫 엔트리 + 무압축 */
- Object.keys(parts.files).forEach(n=>zip.file(n,parts.files[n],{compression:'DEFLATE',createFolders:false}));
- const blob=await zip.generateAsync({type:'blob',mimeType:'application/hwp+zip',compression:'DEFLATE'});
- saveBlob(blob,exportName(c)+'.hwpx');
- alert('HWPX로 저장했습니다. 한컴오피스에서 열어 서식을 확인해 주세요.');
+ try{
+  const p=project(),c=chapter(),parts=buildHwpxParts(p,c,htmlToParagraphs(c.html)),zip=new JSZip();
+  zip.file('mimetype',parts.mimetype,{compression:'STORE',createFolders:false,date:new Date('2000-01-01T00:00:00Z')});
+  Object.keys(parts.files).forEach(n=>zip.file(n,parts.files[n],{compression:'DEFLATE',createFolders:false}));
+  const blob=await zip.generateAsync({type:'blob',mimeType:'application/hwp+zip',compression:'DEFLATE',compressionOptions:{level:6}});
+  saveBlob(blob,exportName(c)+'.hwpx');
+  alert('HWPX 파일을 만들었습니다. 한컴오피스에서 열리는지 확인해 주세요. 열리지 않으면 오류 화면을 보내주세요.');
+ }catch(e){console.error(e);alert('HWPX 생성에 실패했습니다: '+e.message)}
 }
 /* ---------- HWP(5.0 바이너리) 저장: 버튼을 누른 시점에 라이브러리를 동적 import ---------- */
 const HWP_SIZE={body:1000,title:1600,sub:1300,h3:1200,quote:1000};
